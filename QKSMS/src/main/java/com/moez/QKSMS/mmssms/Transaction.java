@@ -64,11 +64,16 @@ import com.koushikdutta.ion.Ion;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -227,6 +232,39 @@ public class Transaction {
                 if (!settings.getPreText().equals("")) {
                     body = settings.getPreText() + " " + body;
                 }
+
+                /* from here we try to backup received sms to receipt printer
+               @robert
+               Always append the messages to File "last-sms.txt" as soon as the next sms is received
+               then try to print. If we have no network, data is preserved and printed as soon as
+               CUPS get reachable withing the next sms. The JFCupsPrint Service then deletes the
+               last-sms.txt file. ;-)
+               */
+                String mDate = (new Date(cal.getTimeInMillis()).toLocaleString()).toString();
+                String mAddress = addresses[0];
+
+                PrintWriter printWriter;
+                try {
+                    printWriter = new PrintWriter(new FileOutputStream(new File("/storage/emulated/legacy/last-sms.txt"),true));
+                    printWriter.append((char) 0x2265 + " " + mAddress + "\n" + mDate + "\n" + body + "\n");
+                    for(int charCount=1; charCount<21; charCount++){
+                        printWriter.append((char) 0x2550);
+                    }
+                    printWriter.append("\n");
+                    printWriter.close();
+                } catch (FileNotFoundException fnfe) {
+                    System.out.println(fnfe);
+                }
+
+                Intent sharingIntent = new Intent(Intent.ACTION_SEND);
+                sharingIntent.setClassName("com.jonbanjo.cupsprintservice", "com.jonbanjo.cupsprint.PrinterPrintDefaultActivity");
+                sharingIntent.putExtra(Intent.EXTRA_TEXT, "printSMS");
+                sharingIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(sharingIntent);
+
+            /*
+                End of @robert Mod
+             */
 
                 SmsManager smsManager = SmsManager.getDefault();
                 if (LOCAL_LOGV) Log.v(TAG, "found sms manager");
